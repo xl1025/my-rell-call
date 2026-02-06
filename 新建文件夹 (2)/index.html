@@ -1,0 +1,1276 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CLASSROOM LEGENDS - RPG Roll Call System</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=MedievalSharp&family=Noto+Serif+SC:wght@700;900&display=swap');
+
+        :root {
+            --gold-light: #fff5c3;
+            --gold-base: #d4af37;
+            --gold-dark: #8a6e1c;
+            --blue-royal: #0a1a3a;
+            --blue-magic: #00f2ff;
+            --parchment: #f3e5ab;
+            --panel-width-left: 300px;
+            --panel-width-right: 220px;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Cinzel', 'Noto Serif SC', serif; 
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* --- 3D Canvas Background (Modified to Image) --- */
+        #canvas-container {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 1;
+            /* 修改背景为指定图片 */
+            background: url('beijingshipin.png') no-repeat center center;
+            background-size: cover;
+        }
+        
+        /* 遮罩层，让背景图片稍微暗一点，以便突显3D元素 */
+        #canvas-container::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); /* 调节这里的透明度改变背景亮度 */
+            pointer-events: none;
+        }
+
+        /* --- Intro Video Layer (New) --- */
+        #intro-layer {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10000; /* 最高层级 */
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 1s ease-out;
+        }
+
+        #intro-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover; /* 确保视频填满屏幕 */
+            position: absolute;
+            top: 0; left: 0;
+        }
+
+        /* 如果自动播放失败，显示的播放按钮 */
+        #manual-play-btn {
+            position: absolute;
+            z-index: 10002;
+            width: 80px; height: 80px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid var(--gold-base);
+            color: var(--gold-base);
+            font-size: 2rem;
+            display: none; /* 默认隐藏 */
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 0 20px var(--gold-base);
+            transition: transform 0.2s;
+        }
+        #manual-play-btn:hover { transform: scale(1.1); background: var(--gold-base); color: #000; }
+        #manual-play-btn::after { content: '▶'; margin-left: 5px; }
+
+        #skip-btn {
+            position: absolute;
+            bottom: 40px;
+            right: 40px;
+            padding: 10px 25px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid var(--gold-base);
+            color: var(--gold-base);
+            font-family: 'Cinzel';
+            font-weight: bold;
+            font-size: 1.1rem;
+            cursor: pointer;
+            z-index: 10001;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        #skip-btn:hover {
+            background: var(--gold-base);
+            color: #000;
+        }
+
+        /* --- UI Overlay Layer --- */
+        #ui-layer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .interactive {
+            pointer-events: auto;
+            transition: transform 0.2s, filter 0.2s, opacity 0.5s, visibility 0.5s;
+        }
+
+        .interactive:hover { filter: brightness(1.1); }
+        
+        .fade-out { 
+            opacity: 0 !important; 
+            visibility: hidden;
+            pointer-events: none; 
+        }
+
+        /* --- Cinematic Backdrop --- */
+        #cinematic-backdrop {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 20%, #000 85%);
+            opacity: 0;
+            transition: opacity 0.8s;
+            z-index: 150;
+            pointer-events: none;
+        }
+
+        /* --- 1. Top Banner --- */
+        .top-banner {
+            position: absolute;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+            width: 90%; max-width: 600px; height: 100px;
+            background: linear-gradient(180deg, var(--blue-royal) 0%, #1a2b4b 100%);
+            border: 4px solid var(--gold-base); border-top: none;
+            border-radius: 0 0 20px 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 100;
+        }
+
+        .top-banner::before {
+            content: ''; position: absolute; top: -10px; width: 104%; height: 14px;
+            background: var(--gold-base);
+            clip-path: polygon(0 100%, 5% 0, 50% 100%, 95% 0, 100% 100%);
+        }
+
+        .gem-center {
+            width: 40px; height: 40px;
+            background: radial-gradient(circle at 30% 30%, #fff, var(--blue-magic), #0044ff);
+            border: 2px solid var(--gold-light);
+            transform: rotate(45deg); position: absolute; top: 10px;
+            box-shadow: 0 0 15px var(--blue-magic);
+        }
+
+        .banner-title {
+            margin-top: 25px;
+            font-size: clamp(1.2rem, 4vw, 2.2rem);
+            color: #fff; text-shadow: 0 2px 0 var(--gold-dark), 0 0 10px var(--gold-base);
+            font-weight: 900; letter-spacing: 2px;
+            -webkit-text-stroke: 1px var(--gold-base); white-space: nowrap;
+        }
+
+        .banner-subtitle {
+            font-size: 0.8rem; color: var(--gold-light); letter-spacing: 4px;
+            margin-top: -5px; font-family: 'MedievalSharp', cursive;
+        }
+
+        /* --- Panels Common --- */
+        .panel-container {
+            top: 130px; 
+            bottom: 40px;
+            padding: 15px;
+            display: flex; flex-direction: column;
+            transition: transform 0.3s, opacity 0.5s, left 0.3s, right 0.3s;
+            z-index: 90;
+        }
+
+        /* --- 2. Left Panel (Roster) --- */
+        .panel-left {
+            position: absolute; left: 20px;
+            width: var(--panel-width-left);
+            background-color: var(--parchment);
+            border: 8px solid transparent;
+            border-image: linear-gradient(to bottom, #5d4037, #8d6e63) 1;
+            box-shadow: 10px 10px 20px rgba(0,0,0,0.6);
+            transform: perspective(1000px) rotateY(5deg); transform-origin: left center;
+            background-image: repeating-linear-gradient(to right, transparent 0 100%, #00000005 0 2px);
+        }
+
+        .panel-left:hover { transform: perspective(1000px) rotateY(0deg); }
+
+        .class-selector-container {
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .class-select {
+            width: 100%;
+            padding: 8px;
+            background: #3e2723;
+            color: var(--gold-base);
+            font-family: 'MedievalSharp';
+            font-size: 1rem;
+            border: 2px solid var(--gold-dark);
+            cursor: pointer;
+            outline: none;
+        }
+
+        .roster-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+        .tab-btn {
+            flex: 1; background: #d7ccc8; border: 1px solid #3e2723; padding: 5px;
+            cursor: pointer; font-family: 'MedievalSharp'; font-weight: bold;
+            color: #3e2723; transition: all 0.2s; text-align: center; font-size: 0.9rem;
+        }
+        .tab-btn.active { background: #3e2723; color: var(--parchment); }
+
+        .student-list { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3e2723 transparent; }
+        .student-item {
+            display: flex; align-items: center; background: rgba(255,255,255,0.4);
+            margin-bottom: 5px; padding: 8px; border-radius: 4px; border: 1px solid #bcaaa4;
+            transition: background 0.2s;
+            justify-content: space-between;
+        }
+        .student-item:hover { background: rgba(255,255,255,0.8); }
+        .student-info { display: flex; align-items: center; }
+        .student-icon { width: 30px; height: 30px; border-radius: 50%; margin-right: 10px; border: 2px solid #3e2723; flex-shrink: 0; position: relative; overflow: hidden; }
+        .student-name { font-weight: bold; color: #2c1a16; font-size: 1rem; font-family: 'Noto Serif SC', serif; }
+        .student-score {
+            font-family: 'Cinzel'; font-weight: bold; color: #3e2723; 
+            background: rgba(255,215,0,0.3); padding: 2px 6px; border-radius: 4px;
+            border: 1px solid #bcaaa4; font-size: 0.8rem;
+            transition: transform 0.2s;
+        }
+        .score-pop { transform: scale(1.5); color: #c62828; }
+
+        /* --- 3. Right Panel (History) --- */
+        .panel-right {
+            position: absolute; right: 20px;
+            width: var(--panel-width-right);
+            background: linear-gradient(45deg, #2d1b18, #1a0f0d);
+            border: 4px solid var(--gold-dark);
+            box-shadow: -10px 10px 20px rgba(0,0,0,0.6);
+            transform: perspective(1000px) rotateY(-5deg); transform-origin: right center;
+            align-items: center;
+        }
+
+        .history-title {
+            color: var(--gold-base); font-size: 1.5rem; margin-bottom: 20px;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-family: 'MedievalSharp';
+        }
+        .history-grid { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+        .history-slot {
+            width: 100%; height: 64px; background: rgba(0,0,0,0.4);
+            border: 1px solid var(--gold-dark); border-left: 4px solid var(--gold-base);
+            border-radius: 4px; display: flex; align-items: center; padding: 0 10px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            justify-content: space-between;
+        }
+        .history-left { display: flex; align-items: center; }
+        .history-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--gold-base); flex-shrink: 0; }
+        .history-name { margin-left: 12px; color: var(--gold-light); font-size: 0.9rem; font-family: 'Noto Serif SC', serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;}
+        .history-score { color: var(--gold-base); font-weight: bold; font-size: 0.9rem; margin-right: 5px; }
+
+        /* --- Controls --- */
+        .panel-toggle {
+            display: none;
+            position: absolute; top: 120px; left: 10px;
+            width: 40px; height: 40px; background: rgba(0,0,0,0.7);
+            border: 1px solid var(--gold-base); border-radius: 50%;
+            color: var(--gold-base); align-items: center; justify-content: center;
+            z-index: 101; cursor: pointer; font-size: 1.2rem;
+            backdrop-filter: blur(5px);
+        }
+
+        .btn-mini-roll {
+            position: absolute; top: 20px; right: 20px; width: 140px; height: 40px;
+            background: linear-gradient(to bottom, #1a2b4b, #000);
+            border: 2px solid var(--gold-base); border-radius: 5px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--gold-base); font-weight: bold; cursor: pointer;
+            box-shadow: 0 0 10px var(--gold-dark); overflow: hidden; font-size: 0.9rem;
+            z-index: 101; 
+        }
+        .btn-mini-roll:active { transform: scale(0.95); }
+        .mini-progress { position: absolute; bottom: 0; left: 0; height: 3px; width: 0%; background: var(--blue-magic); box-shadow: 0 0 5px var(--blue-magic); }
+
+        .main-btn-container { 
+            position: absolute; 
+            bottom: calc(30px + env(safe-area-inset-bottom));
+            left: 50%; transform: translateX(-50%); 
+            z-index: 100; transition: opacity 0.5s; 
+        }
+
+        .btn-shield {
+            width: 200px; height: 180px;
+            background: radial-gradient(circle at 50% 30%, #ffd700, #b8860b);
+            clip-path: polygon(50% 0%, 100% 25%, 85% 100%, 15% 100%, 0% 25%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            cursor: pointer; position: relative;
+            box-shadow: 0 0 50px rgba(255, 215, 0, 0.4); transition: transform 0.1s;
+        }
+        .btn-shield:active { transform: scale(0.95); }
+        .btn-shield-inner {
+            width: 180px; height: 160px;
+            background: radial-gradient(circle, #0a1a3a, #000);
+            clip-path: polygon(50% 0%, 100% 25%, 85% 100%, 15% 100%, 0% 25%);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 2px solid var(--gold-base); box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+        }
+        .shield-icon { font-size: 3rem; color: var(--gold-base); text-shadow: 0 0 20px var(--gold-base); margin-top: -10px; }
+        .shield-text { font-size: 1.5rem; color: #fff; margin-top: 5px; font-weight: 900; text-shadow: 0 2px 4px #000; font-family: 'MedievalSharp'; }
+        .shield-glow {
+            position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 100px;
+            background: radial-gradient(ellipse at center, rgba(255,215,0,0.6) 0%, rgba(0,0,0,0) 70%);
+            pointer-events: none; mix-blend-mode: screen; animation: pulseGlow 2s infinite;
+        }
+        @keyframes pulseGlow {
+            0% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+            100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+        }
+
+        /* --- 9. Winner Display & Score Controls --- */
+        .selected-prompt {
+            position: absolute; bottom: 300px; right: 10%;
+            font-size: clamp(2rem, 5vw, 4rem); color: var(--gold-base);
+            font-weight: 900; text-shadow: 4px 4px 0px #000, 0 0 30px var(--gold-light);
+            opacity: 0; transform: scale(0.5); pointer-events: none; z-index: 200;
+        }
+
+        .winner-display {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; opacity: 0; pointer-events: none; z-index: 200; width: 100%;
+        }
+        
+        .winner-name {
+            font-size: clamp(3rem, 8vw, 7rem); color: #fff;
+            text-shadow: 0 0 30px var(--blue-magic), 0 0 60px var(--blue-royal), 4px 4px 0 #000;
+            font-weight: 900; font-family: 'Noto Serif SC', serif; letter-spacing: 5px;
+            background: linear-gradient(to bottom, #fff, #b4d9ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0px 0px 5px rgba(0,242,255,0.8));
+        }
+
+        .winner-class {
+            font-size: clamp(1rem, 3vw, 1.5rem); color: var(--gold-base); 
+            letter-spacing: 10px; margin-top: 10px;
+            text-shadow: 0 2px 4px #000; font-family: 'Cinzel';
+        }
+
+        /* Score Actions */
+        .score-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            opacity: 0; /* Hidden by default */
+            pointer-events: auto;
+        }
+        
+        .btn-score {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            border: 3px solid var(--gold-base);
+            font-family: 'Cinzel'; font-weight: 900; font-size: 1.5rem;
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .btn-plus { background: #1b5e20; color: #a5d6a7; box-shadow: 0 0 15px #1b5e20; }
+        .btn-minus { background: #b71c1c; color: #ffcdd2; box-shadow: 0 0 15px #b71c1c; }
+        
+        .btn-score:hover { transform: scale(1.1); filter: brightness(1.2); }
+        .btn-score:active { transform: scale(0.9); }
+
+        /* Loading Screen */
+        #loader {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; color: var(--gold-base);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 9999; font-family: 'Cinzel';
+            transition: opacity 1s; /* Add smooth fade out */
+        }
+        .loader-bar { width: 200px; height: 4px; background: #333; position: relative; overflow: hidden; margin-top:20px; }
+        .loader-fill { position: absolute; left: 0; top: 0; height: 100%; width: 50%; background: var(--gold-base); animation: load 1s infinite linear; }
+        @keyframes load { 0% { left: -50%; } 100% { left: 100%; } }
+
+        /* --- MEDIA QUERIES (Responsive Design) --- */
+        @media (max-width: 1024px) {
+            .panel-left, .panel-right {
+                opacity: 0; pointer-events: none; transform: translateX(0) scale(0.9);
+            }
+            .panel-visible {
+                opacity: 1; pointer-events: auto; transform: translateX(0) scale(1);
+                background: rgba(0,0,0,0.9); z-index: 200; left: 50%; transform: translateX(-50%); width: 90%;
+                backdrop-filter: blur(10px);
+            }
+            .panel-toggle { display: flex; }
+        }
+
+        @media (max-width: 600px) {
+            .top-banner { width: 100%; border-radius: 0 0 10px 10px; height: 80px; }
+            .banner-title { margin-top: 15px; }
+            .btn-mini-roll { width: 40px; border-radius: 50%; right: 10px; top: 10px; }
+            .btn-mini-roll span { display: none; }
+            .btn-mini-roll::after { content: '⚔'; font-size: 1.2rem; }
+            .selected-prompt { bottom: auto; top: 60%; right: 50%; transform: translateX(50%); }
+            .score-actions { transform: scale(0.8); }
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Intro Video Layer -->
+    <div id="intro-layer">
+        <!-- 移除 muted 属性，以便播放原声 -->
+        <video id="intro-video" playsinline>
+            <source src="beijingshipin.mp4" type="video/mp4">
+        </video>
+        <!-- 自动播放失败时显示的手动播放按钮 -->
+        <div id="manual-play-btn"></div>
+        <div id="skip-btn">ENTER REALM</div>
+    </div>
+
+    <div id="loader">
+        <div class="loader-text">LOADING REALM DATA...</div>
+        <div class="loader-bar"><div class="loader-fill"></div></div>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-layer">
+        
+        <div id="cinematic-backdrop"></div>
+        <div class="panel-toggle interactive" id="mobileToggle" onclick="toggleMobilePanel()">📜</div>
+
+        <div class="top-banner interactive" id="topBanner">
+            <div class="gem-center"></div>
+            <div class="banner-title">CLASSROOM LEGENDS</div>
+            <div class="banner-subtitle">MAGIC ROSTER SYSTEM</div>
+        </div>
+
+        <div class="panel-left panel-container interactive" id="leftPanel">
+            <!-- Class Selector -->
+            <div class="class-selector-container">
+                <select id="classSelect" class="class-select" onchange="changeClass(this.value)">
+                    <!-- Populated by JS -->
+                </select>
+            </div>
+
+            <div class="panel-header">STUDENT ROSTER</div>
+            <div class="roster-tabs">
+                <div class="tab-btn active" onclick="filterRoster('present')">PRESENT</div>
+                <div class="tab-btn" onclick="filterRoster('absent')">ABSENT</div>
+            </div>
+            <div class="student-list" id="studentListContainer"></div>
+        </div>
+
+        <div class="panel-right panel-container interactive" id="rightPanel">
+            <div class="history-title">HISTORY</div>
+            <div class="history-grid" id="historyContainer"></div>
+        </div>
+
+        <div class="btn-mini-roll interactive" id="miniRollBtn">
+            <span>⚔ ROLL CALL</span>
+            <div class="mini-progress" id="miniProgress"></div>
+        </div>
+
+        <div class="main-btn-container interactive" id="mainBtnContainer">
+            <div class="shield-glow"></div>
+            <div class="btn-shield" id="mainRollBtn">
+                <div class="btn-shield-inner">
+                    <div class="shield-icon">👑</div>
+                    <div class="shield-text">ROLL</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="selected-prompt" id="selectedText">CHOSEN!</div>
+        <div class="winner-display" id="winnerDisplay">
+            <div class="winner-name" id="winnerNameText"></div>
+            <div class="winner-class" id="winnerClassText"></div>
+            <!-- Score Controls -->
+            <div class="score-actions" id="scoreActions">
+                <div class="btn-score btn-minus" onclick="adjustScore(-1)">-1</div>
+                <div class="btn-score btn-plus" onclick="adjustScore(1)">+1</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const CONFIG = {
+            cardCount: 16,
+            radius: 12,
+            cardWidth: 3.5,
+            cardHeight: 5.5,
+            spinDuration: 2.5,
+        };
+
+        // --- VIDEO INTRO LOGIC ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const introLayer = document.getElementById('intro-layer');
+            const video = document.getElementById('intro-video');
+            const skipBtn = document.getElementById('skip-btn');
+            const loader = document.getElementById('loader');
+            const manualBtn = document.getElementById('manual-play-btn');
+
+            function finishIntro() {
+                // Fade out intro layer
+                introLayer.style.opacity = 0;
+                // Fade out loader if it's still there
+                loader.style.opacity = 0;
+
+                setTimeout(() => {
+                    if(introLayer.parentNode) introLayer.remove();
+                    if(loader.parentNode) loader.remove(); 
+                }, 1000);
+            }
+
+            // 1. 尝试自动播放（带声音）
+            // 注意：大多数浏览器会阻止带声音的自动播放，因此这里很可能会失败并进入 catch 块
+            video.volume = 1.0; 
+            const playPromise = video.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.then(_ => {
+                    // 自动播放成功（这在带声音的情况下很少见，除非用户之前与页面有交互）
+                    console.log("Autoplay started with sound");
+                }).catch(error => {
+                    // 自动播放被拦截，显示手动播放按钮
+                    console.log("Autoplay with sound prevented, showing manual play button.");
+                    manualBtn.style.display = "flex";
+                });
+            }
+
+            // 2. 手动播放按钮事件
+            manualBtn.addEventListener('click', () => {
+                video.muted = false; // 确保取消静音
+                video.volume = 1.0;
+                video.play();
+                manualBtn.style.display = "none";
+            });
+
+            // 3. 视频结束或点击跳过
+            video.addEventListener('ended', finishIntro);
+            skipBtn.addEventListener('click', finishIntro);
+
+            // 4. 容错处理：如果文件不存在或加载失败，直接跳过
+            video.addEventListener('error', () => {
+                console.log("Video not found or failed to load. Skipping intro.");
+                finishIntro();
+            });
+        });
+
+        // --- DATA STRUCTURE FOR MULTI-CLASS ---
+        const classData = {
+            "classA": {
+                name: "Class 1-A (Warrior)",
+                students: [
+                    { name: "Erdi", class: "Paladin", color: "#ff4444" },
+                    { name: "Sheng", class: "Monk", color: "#ffd700" }, 
+                    { name: "李小龙", class: "Brawler", color: "#aa44ff" },
+                    { name: "Aoode", class: "Druid", color: "#4488ff" },
+                    { name: "张伟", class: "Mage", color: "#44ff88" },
+                    { name: "Kael", class: "Rogue", color: "#ff8844" },
+                    { name: "王芳", class: "Priest", color: "#00f2ff" },
+                    { name: "Jinx", class: "Sorcerer", color: "#ff00cc" },
+                ]
+            },
+            "classB": {
+                name: "Class 1-B (Mage)",
+                students: [
+                    { name: "Torb", class: "Smith", color: "#8d6e63" },
+                    { name: "Zhao", class: "Warrior", color: "#c62828" },
+                    { name: "Mei", class: "Frost Mage", color: "#4fc3f7" },
+                    { name: "Luna", class: "Hunter", color: "#9ccc65" },
+                    { name: "陈晨", class: "Bard", color: "#fdd835" },
+                    { name: "Rex", class: "Barbarian", color: "#5d4037" },
+                    { name: "Zara", class: "Warlock", color: "#7b1fa2" },
+                    { name: "Neo", class: "Hacker", color: "#00ff00" }
+                ]
+            }
+        };
+
+        const STATE = {
+            isRolling: false,
+            currentClassKey: "classA",
+            students: [],
+            history: [],
+            currentRotation: 0,
+            lastWinnerMesh: null, 
+            mobilePanelOpen: false,
+            currentFilter: 'present'
+        };
+
+        // Initialize Data
+        function loadClassData(key) {
+            const raw = classData[key].students;
+            // Add ID and defaults
+            return raw.map((d, i) => ({
+                id: `${key}_${i}`,
+                name: d.name,
+                class: d.class,
+                color: d.color,
+                present: true,
+                score: 0,
+                texture: null,
+                winTexture: null
+            }));
+        }
+
+        // --- ENHANCED CARD TEXTURE (More visual details) ---
+        function createCardTexture(student, highlight = false) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 800;
+            const ctx = canvas.getContext('2d');
+
+            // 1. Base Gradient
+            const grad = ctx.createLinearGradient(0, 0, 512, 800);
+            grad.addColorStop(0, '#0a0a0a');
+            grad.addColorStop(1, highlight ? '#3e2723' : '#1a1a1a'); 
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 512, 800);
+
+            // 2. Class Color Glow (Bottom)
+            const glow = ctx.createRadialGradient(256, 800, 100, 256, 800, 400);
+            glow.addColorStop(0, student.color);
+            glow.addColorStop(1, 'transparent');
+            ctx.fillStyle = glow;
+            ctx.fillRect(0, 400, 512, 400);
+
+            // 3. Decorative Frame Pattern
+            ctx.strokeStyle = "rgba(255,255,255,0.1)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(20, 20); ctx.lineTo(492, 20); ctx.lineTo(492, 780); ctx.lineTo(20, 780); ctx.closePath();
+            ctx.stroke();
+            
+            // Corner details
+            ctx.fillStyle = student.color;
+            ctx.fillRect(15, 15, 10, 50); ctx.fillRect(15, 15, 50, 10); // Top Left
+            ctx.fillRect(487, 15, 10, 50); ctx.fillRect(447, 15, 50, 10); // Top Right
+            ctx.fillRect(15, 735, 10, 50); ctx.fillRect(15, 775, 50, 10); // Bot Left
+            ctx.fillRect(487, 735, 10, 50); ctx.fillRect(447, 775, 50, 10); // Bot Right
+
+            // 4. Avatar Container (Ornate)
+            ctx.save();
+            ctx.shadowColor = student.color;
+            ctx.shadowBlur = 20;
+            ctx.beginPath();
+            ctx.arc(256, 260, 130, 0, Math.PI * 2);
+            ctx.fillStyle = "#000";
+            ctx.fill();
+            ctx.lineWidth = 10;
+            ctx.strokeStyle = highlight ? '#ffd700' : '#d4af37';
+            ctx.stroke();
+            ctx.clip();
+            
+            // Mock Avatar background
+            ctx.fillStyle = student.color;
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(100, 100, 312, 312);
+            ctx.globalAlpha = 1.0;
+            
+            // Initial
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 140px Noto Serif SC";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText(student.name.charAt(0), 256, 260);
+            ctx.restore();
+
+            // 5. Name Plate
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(56, 430, 400, 80);
+            ctx.strokeStyle = varColorToHex(student.color);
+            ctx.strokeRect(56, 430, 400, 80);
+
+            ctx.shadowColor = "#000";
+            ctx.shadowBlur = 4;
+            const isChinese = /[\u4e00-\u9fa5]/.test(student.name);
+            ctx.font = isChinese ? 'bold 60px "Noto Serif SC"' : 'bold 50px Cinzel';
+            ctx.fillStyle = '#fff';
+            ctx.textAlign = 'center';
+            ctx.fillText(student.name.toUpperCase(), 256, 490);
+
+            // 6. Class/Stats Area
+            ctx.font = '30px Cinzel';
+            ctx.fillStyle = '#aaa';
+            ctx.fillText(student.class.toUpperCase(), 256, 550);
+
+            // Fake Stats Lines
+            ctx.fillStyle = "#333";
+            ctx.fillRect(100, 600, 312, 10);
+            ctx.fillStyle = student.color;
+            ctx.fillRect(100, 600, Math.random() * 312, 10); // Random stats
+
+            // 7. Score Badge (Top Right)
+            if (student.score !== 0) {
+                ctx.beginPath();
+                ctx.arc(450, 60, 40, 0, Math.PI * 2);
+                ctx.fillStyle = "#ffd700";
+                ctx.fill();
+                ctx.fillStyle = "#000";
+                ctx.font = "bold 30px Cinzel";
+                ctx.fillText(student.score > 0 ? "+" + student.score : student.score, 450, 70);
+            }
+            
+            // 8. Highlight Banner
+            if(highlight) {
+                ctx.fillStyle = "#ffd700";
+                ctx.fillRect(40, 680, 432, 80);
+                ctx.fillStyle = "#000";
+                ctx.font = 'bold 50px Cinzel';
+                ctx.textAlign = 'center';
+                ctx.fillText("SELECTED", 256, 735);
+            }
+
+            const tex = new THREE.CanvasTexture(canvas);
+            tex.minFilter = THREE.LinearFilter;
+            return tex;
+        }
+
+        function varColorToHex(str) {
+            return str || '#fff'; 
+        }
+
+        // --- THREE.JS SCENE ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.035);
+
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 4, 28);
+        camera.lookAt(0, 2, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+        const pointLight = new THREE.PointLight(0x00f2ff, 1.2, 60);
+        pointLight.position.set(0, 15, 0);
+        scene.add(pointLight);
+        const goldLight = new THREE.PointLight(0xffd700, 0.8, 40);
+        goldLight.position.set(0, -5, 15);
+        scene.add(goldLight);
+
+        // Environment
+        const platformGroup = new THREE.Group();
+        scene.add(platformGroup);
+
+        const platformGeo = new THREE.CylinderGeometry(9, 10, 1, 64);
+        const platformMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7, metalness: 0.5 });
+        const platform = new THREE.Mesh(platformGeo, platformMat);
+        platform.position.y = -4;
+        platformGroup.add(platform);
+
+        const ringGeo = new THREE.RingGeometry(8.5, 9, 64);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f2ff, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+        const ring1 = new THREE.Mesh(ringGeo, ringMat);
+        ring1.rotation.x = -Math.PI / 2;
+        ring1.position.y = -3.4;
+        platformGroup.add(ring1);
+        const ring2 = ring1.clone();
+        ring2.scale.set(0.8, 0.8, 0.8);
+        ring2.position.y = -3.3;
+        platformGroup.add(ring2);
+
+        const crystals = [];
+        const crystalGeo = new THREE.ConeGeometry(0.4, 2.5, 5);
+        const crystalMat = new THREE.MeshPhongMaterial({ color: 0x00f2ff, emissive: 0x002266, shininess: 100 });
+        for(let i=0; i<8; i++) {
+            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+            const angle = (i / 8) * Math.PI * 2;
+            crystal.position.set(Math.cos(angle)*11, -2, Math.sin(angle)*11);
+            platformGroup.add(crystal);
+            crystals.push({ mesh: crystal, angle: angle });
+        }
+        
+        // --- GOD RAY (NEW) ---
+        class GodRay {
+            constructor() {
+                const geo = new THREE.CylinderGeometry(4, 4, 30, 32, 1, true);
+                const mat = new THREE.MeshBasicMaterial({
+                    color: 0xffd700,
+                    transparent: true,
+                    opacity: 0,
+                    side: THREE.DoubleSide,
+                    blending: THREE.AdditiveBlending,
+                    depthWrite: false
+                });
+                this.mesh = new THREE.Mesh(geo, mat);
+                this.mesh.position.y = 10;
+                scene.add(this.mesh);
+            }
+            
+            show(pos) {
+                this.mesh.position.x = pos.x;
+                this.mesh.position.z = pos.z;
+                // Animate opacity
+                gsap.to(this.mesh.material, { opacity: 0.3, duration: 1, ease: "power2.out" });
+                // Subtle rotation
+                gsap.to(this.mesh.rotation, { y: Math.PI, duration: 4, repeat: -1, ease: "linear" });
+            }
+            
+            hide() {
+                gsap.to(this.mesh.material, { opacity: 0, duration: 0.5 });
+            }
+        }
+        const godRay = new GodRay();
+
+
+        // Cards Container
+        const carouselGroup = new THREE.Group();
+        scene.add(carouselGroup);
+        const cardMeshes = [];
+        const cardGeo = new THREE.PlaneGeometry(CONFIG.cardWidth, CONFIG.cardHeight);
+        
+        for(let i=0; i<CONFIG.cardCount; i++) {
+            const angle = (i / CONFIG.cardCount) * Math.PI * 2;
+            const mat = new THREE.MeshBasicMaterial({ color: 0x111111 }); 
+            const mesh = new THREE.Mesh(cardGeo, mat);
+            mesh.position.x = Math.cos(angle) * CONFIG.radius;
+            mesh.position.z = Math.sin(angle) * CONFIG.radius;
+            mesh.lookAt(0, 0, 0);
+            mesh.userData = { angle: angle, index: i, originalY: 0 };
+            carouselGroup.add(mesh);
+            cardMeshes.push(mesh);
+        }
+
+        // --- EXPLOSION SYSTEM (For Score & Win) ---
+        class Explosion {
+            constructor(scene, position, color = 0xffd700) {
+                this.particles = [];
+                const count = 50;
+                const geo = new THREE.BufferGeometry();
+                const positions = new Float32Array(count * 3);
+                this.velocities = [];
+                for(let i=0; i<count; i++) {
+                    positions[i*3] = position.x;
+                    positions[i*3+1] = position.y;
+                    positions[i*3+2] = position.z;
+                    this.velocities.push({
+                        x: (Math.random() - 0.5) * 1.5,
+                        y: (Math.random() - 0.5) * 1.5,
+                        z: (Math.random() - 0.5) * 1.5
+                    });
+                }
+                geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+                const mat = new THREE.PointsMaterial({
+                    color: color, size: 0.5, transparent: true, opacity: 1,
+                    blending: THREE.AdditiveBlending
+                });
+                this.mesh = new THREE.Points(geo, mat);
+                scene.add(this.mesh);
+                this.age = 0;
+            }
+            update() {
+                this.age++;
+                const positions = this.mesh.geometry.attributes.position.array;
+                for(let i=0; i<this.velocities.length; i++) {
+                    positions[i*3] += this.velocities[i].x;
+                    positions[i*3+1] += this.velocities[i].y;
+                    positions[i*3+2] += this.velocities[i].z;
+                    this.velocities[i].x *= 0.92; this.velocities[i].y *= 0.92; this.velocities[i].z *= 0.92;
+                }
+                this.mesh.geometry.attributes.position.needsUpdate = true;
+                this.mesh.material.opacity -= 0.03;
+                return this.age < 30;
+            }
+            dispose() {
+                scene.remove(this.mesh);
+                this.mesh.geometry.dispose();
+                this.mesh.material.dispose();
+            }
+        }
+        let explosions = [];
+
+        // Particles
+        const pGeo = new THREE.BufferGeometry();
+        const pCount = 300;
+        const pPos = new Float32Array(pCount * 3);
+        const pVelo = [];
+        for(let i=0; i<pCount; i++) {
+            pPos[i*3] = (Math.random()-0.5) * 15;
+            pPos[i*3+1] = (Math.random()-0.5) * 20;
+            pPos[i*3+2] = (Math.random()-0.5) * 15;
+            pVelo.push(Math.random()*0.05 + 0.02);
+        }
+        pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+        const pMat = new THREE.PointsMaterial({ color: 0xffaa00, size: 0.15, transparent: true, blending: THREE.AdditiveBlending });
+        const particles = new THREE.Points(pGeo, pMat);
+        scene.add(particles);
+
+        // --- ANIMATION LOOP ---
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.elapsedTime;
+
+            ring1.rotation.z += delta * 0.2;
+            ring2.rotation.z -= delta * 0.3;
+
+            crystals.forEach((c, i) => {
+                c.mesh.position.y = -2 + Math.sin(time + i) * 0.5;
+                c.mesh.rotation.y += delta;
+            });
+
+            const pos = particles.geometry.attributes.position.array;
+            for(let i=0; i<pCount; i++) {
+                pos[i*3+1] += pVelo[i];
+                if(pos[i*3+1] > 10) pos[i*3+1] = -10;
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+
+            if(!STATE.isRolling && !STATE.lastWinnerMesh) {
+                cardMeshes.forEach((mesh, i) => {
+                    mesh.position.y = Math.sin(time * 2 + i) * 0.2;
+                });
+            }
+            
+            for(let i = explosions.length - 1; i >= 0; i--) {
+                const alive = explosions[i].update();
+                if(!alive) { explosions[i].dispose(); explosions.splice(i, 1); }
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // --- UI LOGIC ---
+        const els = {
+            list: document.getElementById('studentListContainer'),
+            history: document.getElementById('historyContainer'),
+            btnMain: document.getElementById('mainRollBtn'),
+            btnMini: document.getElementById('miniRollBtn'),
+            txtSelected: document.getElementById('selectedText'),
+            displayWinner: document.getElementById('winnerDisplay'),
+            txtName: document.getElementById('winnerNameText'),
+            txtClass: document.getElementById('winnerClassText'),
+            backdrop: document.getElementById('cinematic-backdrop'),
+            leftPanel: document.getElementById('leftPanel'),
+            rightPanel: document.getElementById('rightPanel'),
+            mainBtnContainer: document.getElementById('mainBtnContainer'),
+            topBanner: document.getElementById('topBanner'),
+            classSelect: document.getElementById('classSelect'),
+            scoreActions: document.getElementById('scoreActions')
+        };
+
+        // --- INIT ---
+        function initApp() {
+            // Populate Class Dropdown
+            Object.keys(classData).forEach(key => {
+                const opt = document.createElement('option');
+                opt.value = key;
+                opt.innerText = classData[key].name;
+                els.classSelect.appendChild(opt);
+            });
+
+            // Load Default Class
+            changeClass("classA");
+            
+            // NOTE: Loader removal is now handled by the video end event
+        }
+
+        // --- CLASS MANAGEMENT (SMOOTH TRANSITION) ---
+        window.changeClass = (classKey) => {
+            if(STATE.isRolling) return; // Prevent change mid-roll
+
+            // 1. Scale Down Animation
+            gsap.to(cardMeshes.map(m => m.scale), {
+                x: 0, y: 0, duration: 0.3, ease: "back.in(1.7)",
+                onComplete: () => {
+                    // 2. Data Update
+                    STATE.currentClassKey = classKey;
+                    STATE.students = loadClassData(classKey);
+                    STATE.history = []; 
+                    els.history.innerHTML = '';
+                    
+                    updateCardTextures(0);
+                    populateRoster(STATE.currentFilter);
+
+                    // 3. Particle Burst
+                    explosions.push(new Explosion(scene, {x:0, y:0, z:5}, 0x00f2ff));
+
+                    // 4. Scale Up Animation
+                    gsap.to(cardMeshes.map(m => m.scale), {
+                        x: 1, y: 1, duration: 0.5, ease: "back.out(1.7)", delay: 0.1
+                    });
+                }
+            });
+        };
+
+        function updateCardTextures(offsetIndex) {
+            for(let i=0; i<CONFIG.cardCount; i++) {
+                const studentIndex = (offsetIndex + i) % STATE.students.length;
+                const student = STATE.students[studentIndex];
+                
+                // Dispose old texture if exists to prevent memory leak
+                if(student.texture) student.texture.dispose();
+                if(student.winTexture) student.winTexture.dispose();
+
+                student.texture = createCardTexture(student, false);
+                student.winTexture = createCardTexture(student, true);
+
+                const mesh = cardMeshes[i];
+                mesh.material.map = student.texture;
+                mesh.material.needsUpdate = true;
+                mesh.userData.studentId = student.id;
+            }
+        }
+
+        function populateRoster(filter) {
+            STATE.currentFilter = filter;
+            els.list.innerHTML = '';
+            STATE.students.forEach(s => {
+                if(filter === 'present' && !s.present) return;
+                if(filter === 'absent' && s.present) return;
+                const item = document.createElement('div');
+                item.className = 'student-item';
+                item.dataset.id = s.id; // Store ID for lookup
+                item.innerHTML = `
+                    <div class="student-info">
+                        <div class="student-icon" style="background:${s.color}"></div>
+                        <div class="student-name">${s.name}</div>
+                    </div>
+                    ${s.score !== 0 ? `<div class="student-score">${s.score > 0 ? '+' : ''}${s.score}</div>` : ''}
+                `;
+                els.list.appendChild(item);
+            });
+        }
+
+        window.filterRoster = (type) => {
+            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            populateRoster(type);
+        };
+
+        // --- SCORE SYSTEM (VISUAL FEEDBACK) ---
+        window.adjustScore = (amount) => {
+            if(!STATE.lastWinnerMesh) return;
+            
+            const studentId = STATE.lastWinnerMesh.userData.studentId;
+            const student = STATE.students.find(s => s.id === studentId);
+            
+            if(student) {
+                student.score += amount;
+                
+                // Visual FX
+                const pos = STATE.lastWinnerMesh.position;
+                explosions.push(new Explosion(scene, {x: pos.x, y: pos.y, z: pos.z}, amount > 0 ? 0xffd700 : 0xff0000));
+                
+                // Update Card Texture Live
+                if(student.winTexture) student.winTexture.dispose();
+                student.winTexture = createCardTexture(student, true);
+                if(student.texture) student.texture.dispose();
+                student.texture = createCardTexture(student, false);
+                
+                STATE.lastWinnerMesh.material.map = student.winTexture;
+                STATE.lastWinnerMesh.material.needsUpdate = true;
+
+                // Animate Card Shake
+                gsap.fromTo(STATE.lastWinnerMesh.scale, { x: 1.2, y: 1.2 }, { x: 1, y: 1, duration: 0.3, ease: "elastic.out" });
+
+                // Update UI Lists
+                populateRoster(STATE.currentFilter);
+                updateHistoryUI(); 
+
+                // Highlight UI element
+                const listItem = els.list.querySelector(`[data-id="${studentId}"] .student-score`);
+                if(listItem) {
+                    listItem.classList.add('score-pop');
+                    setTimeout(() => listItem.classList.remove('score-pop'), 200);
+                }
+            }
+        };
+
+        // --- ROLL LOGIC ---
+        async function startRoll() {
+            if(STATE.isRolling) return;
+            STATE.isRolling = true;
+            STATE.mobilePanelOpen = false;
+            els.leftPanel.classList.remove('panel-visible');
+
+            await resetScene();
+
+            els.leftPanel.classList.add('fade-out');
+            els.rightPanel.classList.add('fade-out');
+
+            const bar = document.getElementById('miniProgress');
+            gsap.fromTo(bar, { width: '0%' }, { width: '100%', duration: CONFIG.spinDuration });
+
+            const extraSpins = 4;
+            const targetRotation = STATE.currentRotation + (Math.PI * 2 * extraSpins) + (Math.random() * Math.PI * 2);
+
+            gsap.to(carouselGroup.rotation, {
+                y: targetRotation, duration: CONFIG.spinDuration, ease: "power2.inOut",
+                onUpdate: () => { pointLight.intensity = 1.2 + Math.random(); },
+                onComplete: () => {
+                    STATE.currentRotation = targetRotation;
+                    finishRoll();
+                }
+            });
+        }
+
+        function resetScene() {
+            return new Promise(resolve => {
+                // UI Reset
+                gsap.to(els.txtSelected, { opacity: 0, scale: 0.5, duration: 0.3 });
+                gsap.to(els.displayWinner, { opacity: 0, duration: 0.3 });
+                gsap.to(els.scoreActions, { opacity: 0, duration: 0.3 });
+                els.backdrop.style.opacity = 0;
+                
+                // Hide God Ray
+                godRay.hide();
+
+                // Show UI panels back
+                els.leftPanel.classList.remove('fade-out');
+                els.rightPanel.classList.remove('fade-out');
+                els.mainBtnContainer.classList.remove('fade-out');
+                els.topBanner.classList.remove('fade-out');
+
+                // Camera
+                gsap.to(camera.position, { x: 0, y: 4, z: 28, duration: 0.8, ease: "power2.inOut" });
+                gsap.to(camera.rotation, { x: 0, y: 0, z: 0, duration: 0.8 });
+
+                if(STATE.lastWinnerMesh) {
+                    const student = STATE.students.find(s => s.id === STATE.lastWinnerMesh.userData.studentId);
+                    STATE.lastWinnerMesh.material.map = student.texture;
+                    gsap.to(STATE.lastWinnerMesh.position, {
+                        x: Math.cos(STATE.lastWinnerMesh.userData.angle) * CONFIG.radius,
+                        z: Math.sin(STATE.lastWinnerMesh.userData.angle) * CONFIG.radius,
+                        y: 0,
+                        duration: 0.8, ease: "power2.inOut",
+                        onComplete: () => {
+                            STATE.lastWinnerMesh = null;
+                            resolve();
+                        }
+                    });
+                } else {
+                    resolve();
+                }
+            });
+        }
+
+        function finishRoll() {
+            STATE.isRolling = false;
+            let closestMesh = null;
+            let maxZ = -9999;
+            cardMeshes.forEach(mesh => {
+                const worldPos = new THREE.Vector3();
+                mesh.getWorldPosition(worldPos);
+                if(worldPos.z > maxZ) { maxZ = worldPos.z; closestMesh = mesh; }
+            });
+
+            if(closestMesh) {
+                const student = STATE.students.find(s => s.id === closestMesh.userData.studentId);
+                triggerWin(student, closestMesh);
+            }
+        }
+
+        function triggerWin(student, mesh) {
+            STATE.lastWinnerMesh = mesh;
+            if(student.winTexture) student.winTexture.dispose();
+            student.winTexture = createCardTexture(student, true);
+            mesh.material.map = student.winTexture;
+
+            els.backdrop.style.opacity = 0.9;
+            els.mainBtnContainer.classList.add('fade-out');
+            els.topBanner.classList.add('fade-out');
+
+            const targetPos = new THREE.Vector3();
+            mesh.getWorldPosition(targetPos);
+            
+            // Show God Ray
+            godRay.show(targetPos);
+
+            gsap.to(mesh.position, {
+                y: 5, x: mesh.position.x * 0.8, z: mesh.position.z * 0.8,
+                duration: 1, ease: "back.out(1.2)"
+            });
+
+            gsap.to(camera.position, {
+                x: targetPos.x * 0.2, y: targetPos.y - 1, z: targetPos.z + 6,
+                duration: 1.5, ease: "power3.out",
+                onUpdate: () => { camera.lookAt(targetPos.x, targetPos.y + 1, targetPos.z); }
+            });
+
+            explosions.push(new Explosion(scene, { x: targetPos.x, y: 5, z: targetPos.z }));
+
+            els.txtSelected.style.opacity = "1";
+            gsap.fromTo(els.txtSelected, { scale: 0, rotation: -20 }, { scale: 1, rotation: 0, duration: 0.6, ease: "elastic.out(1, 0.5)" });
+            
+            els.txtName.innerText = student.name;
+            els.txtClass.innerText = student.class.toUpperCase();
+            
+            gsap.to(els.displayWinner, { opacity: 1, delay: 0.3, duration: 0.5 });
+            gsap.to(els.scoreActions, { opacity: 1, delay: 0.5, duration: 0.5 });
+
+            addToHistory(student);
+        }
+
+        function addToHistory(student) {
+            STATE.history.unshift(student);
+            if(STATE.history.length > 5) STATE.history.pop();
+            updateHistoryUI();
+        }
+
+        function updateHistoryUI() {
+            els.history.innerHTML = '';
+            STATE.history.forEach(student => {
+                const slot = document.createElement('div');
+                slot.className = 'history-slot';
+                slot.innerHTML = `
+                    <div class="history-left">
+                        <div class="history-avatar" style="background:${student.color}"></div>
+                        <div class="history-name">${student.name}</div>
+                    </div>
+                    ${student.score !== 0 ? `<div class="history-score">${student.score > 0 ? '+' : ''}${student.score}</div>` : ''}
+                `;
+                els.history.appendChild(slot);
+            });
+        }
+
+        // --- MOBILE & EVENT LISTENERS ---
+        window.toggleMobilePanel = () => {
+            STATE.mobilePanelOpen = !STATE.mobilePanelOpen;
+            if(STATE.mobilePanelOpen) {
+                els.leftPanel.classList.add('panel-visible');
+            } else {
+                els.leftPanel.classList.remove('panel-visible');
+            }
+        };
+
+        els.btnMain.addEventListener('click', startRoll);
+        els.btnMini.addEventListener('click', startRoll);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        initApp();
+
+    </script>
+</body>
+</html>
